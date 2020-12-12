@@ -42,7 +42,7 @@ def get_image():
 @api.resource("/images")
 class Images(Resource):
     def get(self):
-        return [asdict(image) for image in images.get_images(False)]
+        return [asdict(image) for image in images.get_images(is_described=False)]
 
 
 @api.resource("/images/<int:image_id>")
@@ -62,15 +62,12 @@ class Descriptions(Resource):
         except img.DescriptionNotExistsError as e:
             raise NotFound(str(e)) from e
 
+    def delete(self, image_id):
+        images.delete_descriptions(image_id)
+
 
 @api.resource("/images/<int:image_id>/descriptions/<int:description_id>")
 class Description(Resource):
-    def get(self, image_id, description_id):
-        try:
-            return asdict(images.get_description(image_id, description_id))
-        except img.DescriptionNotExistsError as e:
-            raise NotFound(str(e)) from e
-
     def post(self, image_id, description_id):
         logging.debug(request.form)
         description = img.Description(
@@ -83,6 +80,15 @@ class Description(Resource):
         )
         images.add_description(description)
         return asdict(description)
+
+    def get(self, image_id, description_id):
+        try:
+            return asdict(images.get_description(image_id, description_id))
+        except img.DescriptionNotExistsError as e:
+            raise NotFound(str(e)) from e
+
+    def delete(self, image_id, description_id):
+        images.delete_description(image_id, description_id)
 
 
 app.run()

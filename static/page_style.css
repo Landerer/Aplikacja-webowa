@@ -8,6 +8,10 @@ body {
 }
 
 .rectangle {
-    border: 3px solid #FF0000;
+    border: 3px solid #f03f3f;
     position: absolute;
+}
+
+.rectangle_ready {
+    border: 3px solid #2a8136;
 }

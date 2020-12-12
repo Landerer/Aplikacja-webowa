@@ -69,19 +69,20 @@ class ImagesDatabase:
 
     def fetch_image(self, id) -> Image:
         row = self.db_connection.execute(
-            "SELECT image_id, filepath, is_described FROM images WHERE image_id=?",
+            "SELECT image_id, filepath, is_described FROM images WHERE image_id=?"
+            " ORDER BY image_id",
             (id,),
         ).fetchone()
         if row is None:
             raise ImagesDatabaseError(f"Image with id={id} does not exist in the DB")
         return self._image_from_db_row(row)
 
-    def fetch_images(self, *, described: Optional[bool] = None) -> List[Image]:
+    def fetch_images(self, *, is_described: Optional[bool] = None) -> List[Image]:
         query_sql = "SELECT image_id, filepath, is_described FROM images"
         query_params = ()
-        if described is not None:
+        if is_described is not None:
             query_sql += " WHERE is_described=?"
-            query_params = (described,)
+            query_params = (is_described,)
         rows = self.db_connection.execute(query_sql, query_params).fetchall()
         return [self._image_from_db_row(row) for row in rows]
 
@@ -127,6 +128,19 @@ class ImagesDatabase:
             self._description_from_db_row(image_id, row["description_id"], row)
             for row in rows
         ]
+
+    def delete_description(self, image_id: int, description_id: int) -> None:
+        self.db_connection.execute(
+            "DELETE FROM descriptions WHERE image_id=? AND description_id=?",
+            (image_id, description_id),
+        )
+        self.db_connection.commit()
+
+    def delete_descriptions(self, image_id: int) -> None:
+        self.db_connection.execute(
+            "DELETE FROM descriptions WHERE image_id=?", (image_id,)
+        )
+        self.db_connection.commit()
 
 
 class ImageNotExistsError(RuntimeError):
@@ -185,8 +199,8 @@ class Images:
         except ImagesDatabaseError as e:
             raise ImageNotExistsError(image_id) from e
 
-    def get_images(self, described: Optional[bool] = None) -> Iterable[Image]:
-        return self._db.fetch_images(described=described)
+    def get_images(self, is_described: Optional[bool] = None) -> Iterable[Image]:
+        return self._db.fetch_images(is_described=is_described)
 
     def add_description(self, d: Description) -> None:
         self._db.add_description(d)
@@ -199,3 +213,9 @@ class Images:
 
     def get_descriptions(self, image_id: int) -> Iterable[Description]:
         return self._db.fetch_descriptions(image_id)
+
+    def delete_description(self, image_id: int, description_id: int) -> None:
+        self._db.delete_description(image_id, description_id)
+
+    def delete_descriptions(self, image_id: int) -> None:
+        self._db.delete_descriptions(image_id)

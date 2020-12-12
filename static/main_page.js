@@ -1,88 +1,144 @@
+$(document).ready(function () {
+    var canvas = document.getElementById('canvas');
+    var image_id = null;
+    // load an undescribed image
+    function loadNewImage() {
+        canvas.innerHTML = 'Loading new image...';
+        $.ajax({
+            type: 'GET',
+            url: 'images',
+            accepts: 'application/json',
+        }).done(function (images) {
+            console.log(images);
+            var new_image_id = images[0].id;
+            for (var imageNumber in images) {
+                var image = images[imageNumber];
+                if (image.id > image_id) {
+                    new_image_id = image.id;
+                    break;
+                }
+            }
+            image_id = new_image_id;
+            console.log('New image ID=' + image_id)
+            var image = document.createElement('img');
+            image.src = 'image?id=' + image_id;
 
-function initDraw(canvas) {
-    var mouse = {
+            canvas.innerHTML = '';
+            canvas.appendChild(image);
+        })
+    }
+    loadNewImage();
+
+    var rectCoords = {
         x: 0,
         y: 0,
         startX: 0,
-        startY: 0
-    };
-    function setMousePosition(e) {
-        var ev = e || window.event; //Moz || IE
-        if (ev.pageX) { //Moz
-            mouse.x = ev.pageX + window.pageXOffset;
-            mouse.y = ev.pageY + window.pageYOffset;
-        } else if (ev.clientX) { //IE
-            mouse.x = ev.clientX + document.body.scrollLeft;
-            mouse.y = ev.clientY + document.body.scrollTop;
-        }
+        startY: 0,
+        setPosition: function (e) {
+            var ev = e || window.event; //Moz || IE
+            if (ev.pageX) { //Moz
+                this.x = ev.pageX + window.pageXOffset;
+                this.y = ev.pageY + window.pageYOffset;
+            } else if (ev.clientX) { //IE
+                this.x = ev.clientX + document.body.scrollLeft;
+                this.y = ev.clientY + document.body.scrollTop;
+            }
+        },
+        fixStartPosition: function () {
+            this.startX = this.x;
+            this.startY = this.y;
+        },
+        left: function () { return Math.min(this.x, this.startX); },
+        top: function () { return Math.min(this.y, this.startY); },
+        width: function () { return Math.abs(this.x - this.startX); },
+        height: function () { return Math.abs(this.y - this.startY); },
     };
 
-    var element = null;
+    var rectangle = null;
     canvas.onmousemove = function (e) {
-        setMousePosition(e);
-        if (element !== null) {
-            element.style.width = Math.abs(mouse.x - mouse.startX) + 'px';
-            element.style.height = Math.abs(mouse.y - mouse.startY) + 'px';
-            element.style.left = (mouse.x - mouse.startX < 0) ? mouse.x + 'px' : mouse.startX + 'px';
-            element.style.top = (mouse.y - mouse.startY < 0) ? mouse.y + 'px' : mouse.startY + 'px';
+        rectCoords.setPosition(e);
+        if (rectangle !== null) {
+            rectangle.style.left = rectCoords.left() + 'px';
+            rectangle.style.top = rectCoords.top() + 'px';
+            rectangle.style.width = rectCoords.width() + 'px';
+            rectangle.style.height = rectCoords.height() + 'px';
         }
     }
 
-    canvas.onclick = function (e) {
-        if (element !== null) {
-            console.log("finsihed.")
-            let ajax_options = {
+    canvas.onclick = function () {
+        if (rectangle !== null) {
+            var ready_rectangle = rectangle;
+            $.ajax({
                 type: 'POST',
-                url: 'images/7/descriptions/' + element.id,
+                url: 'images/' + image_id + '/descriptions/' + rectangle.id,
                 accepts: 'application/json',
                 dataType: 'json',
                 data: {
-                    'x': mouse.startX,
-                    'y': mouse.startY,
-                    'width': mouse.x - mouse.startX,
-                    'height': mouse.y - mouse.startY
+                    'x': rectCoords.left(),
+                    'y': rectCoords.top(),
+                    'width': rectCoords.width(),
+                    'height': rectCoords.height(),
                 }
-            };
-            var ready_element = element;
-            $.ajax(ajax_options)
-                .done(function (data) {
-                    ready_element.style.border = "3px solid green";
-                })
-            element = null;
+            }).done(function (data) {
+                ready_rectangle.className += ' rectangle_ready';
+            })
+            rectangle = null;
             canvas.style.cursor = "default";
         } else {
-            var descr_id = $('#canvas .rectangle').length
-            console.log("begun.");
-            mouse.startX = mouse.x;
-            mouse.startY = mouse.y;
-            element = document.createElement('div');
-            element.id = descr_id;
-            element.className = 'rectangle'
-            element.style.left = mouse.x + 'px';
-            element.style.top = mouse.y + 'px';
-            canvas.appendChild(element)
+            var descr_id = canvas.childElementCount - 1;
+            rectCoords.fixStartPosition();
+
+            rectangle = document.createElement('div');
+            rectangle.id = descr_id;
+            rectangle.className = 'rectangle'
+            rectangle.style.left = rectCoords.left() + 'px';
+            rectangle.style.top = rectCoords.top() + 'px';
+
+            canvas.appendChild(rectangle)
             canvas.style.cursor = "crosshair";
         }
     }
-}
 
-function clear_descriptions() {
-    var confirmation = confirm("Czy na pewno chcesz usunąć wszystkie opisy obrazu?");
-    if (confirmation) {
-        $('#canvas .rectangle').remove();
+    document.getElementById('clear').onclick = function () {
+        var confirmation = confirm("Czy na pewno chcesz usunąć wszystkie opisy obrazu?");
+        if (confirmation) {
+            $.ajax({
+                type: 'DELETE',
+                url: 'images/' + image_id + '/descriptions',
+                accepts: 'application/json',
+            }).done(function (data) {
+                var child = canvas.firstChild;
+                while (child !== null) {
+                    var nextSibling = child.nextSibling;
+                    if (child.tagName === 'DIV')
+                        child.remove();
+                    child = nextSibling;
+                }
+            })
+        }
     }
-}
 
-function cancel() {
-    var confirmation = confirm("Czy na pewno chcesz usunąć ostatni opis?");
-    if (confirmation) {
-        $('#canvas .rectangle:last-child').remove();
+    document.getElementById('undo').onclick = function () {
+        var last_child = canvas.childNodes[canvas.childNodes.length - 1];
+        console.log(last_child);
+        if (last_child.tagName === 'DIV') {
+            $.ajax({
+                type: 'DELETE',
+                url: 'images/' + image_id + '/descriptions/' + last_child.id,
+                accepts: 'application/json',
+            }).done(function (data) {
+                last_child.remove();
+            })
+        }
     }
-}
 
-function save() {
-    document.getElementById("canvasimg").style.border = "2px solid";
-    var dataURL = canvas.toDataURL();
-    document.getElementById("canvasimg").src = dataURL;
-    document.getElementById("canvasimg").style.display = "inline";
-}
+    document.getElementById('save').onclick = function () {
+        // TODO: zapis w bazie
+        loadNewImage();
+    }
+
+    document.getElementById('next').onclick = function () {
+        loadNewImage();
+    }
+
+})
