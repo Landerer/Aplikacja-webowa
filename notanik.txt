@@ -1,0 +1,14 @@
+Pobranie obrazu z bazy danych, zaznaczenie na obrazie twarzy
+Przesłanie opisu do bazy danych
+Wyświetlanie kolejnych obrazów dopóki istnieją w bazie obrazy nieopisane
+Wymiana danych z serwerem w formacie JSON i z wykorzystaniem techniki REST, obsługa wielu klientów
+Generowanie pliku JPEG/PNG z pliku termograficznego (po stronie serwera)
+
+
+Dzień dobry,
+zamysłem projektu jest to, aby wyświetlać użytkownikowi obraz. "Opis" obrazu to zaznaczenie na tym obrazie twarzy - wielobokiem/prostokątem. Użytkownik nie ma mieć możliwości dodawania zdjęć, jedynie nanoszenia opisu w formie rysunku. Myślę, że łatwo to zrealizować wykorzystując HTML5 + JavaScript (Canvas). Dodatkowo, po stronie serwera należałoby zapamiętywać (oznaczać w bazie), które obrazy zostały już opisane, aby nie powielać ich opisów. Obrazy termograficzne zostaną Państwu dostarczone, rozmawiałam już z Profesorem Rumińskim, więc pliki termograficzne Państwu zostaną udostępnione. Postaram się, aby było to możliwe w tym tygodniu.
+Opisane obrazy tj. z naniesionym zaznaczeniem twarzy powinny być zapisane po stronie serwera, np. w oddzielnym folderze aby można było je łatwo zlokalizować.
+Czyli podsumowując: po stronie serwera znajdują się pliki termograficzne, które po jego stronie powinny być zamieniane na pliki JPEG/PNG. Klient WWW otrzymuje obraz, na którym może zaznaczyć twarz. Obraz wraz z opisem jest przesyłany na serwer i oznaczany w bazie jako "opisany".
+
+
+Są one zapisane jako skompresowane macierze zgodnie z Numpy - npz. W związku z tym pewnie wymagało to będzie od stworzenia części po stronie serwera w Pythonie. Po odczytaniu danych z pliku macierz będzie miała postać (liczba klatek, wysokość, szerokość). Trzeba będzie po stronie serwera generować z poszczególnych klatek obrazy. W razie problemów z odczytaniem sekwencji postaram się pomóc.

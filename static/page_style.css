@@ -1,0 +1,13 @@
+body {
+    background-color: #fafab7;
+}
+
+#canvas {
+    display: inline-block;
+    border: 5px solid #000000;
+}
+
+.rectangle {
+    border: 3px solid #FF0000;
+    position: absolute;
+}
