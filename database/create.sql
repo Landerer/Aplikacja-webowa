@@ -14,10 +14,6 @@ CREATE TABLE "images" (
         is_described >= 0
         and is_described <= 1
     ),
-    "is_being_described" INTEGER NOT NULL CHECK(
-        is_being_described >= 0
-        and is_being_described <= 1
-    ),
     FOREIGN KEY("file_id") REFERENCES "files"("file_id"),
     UNIQUE("file_id", "frame")
 );

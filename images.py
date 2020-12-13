@@ -104,9 +104,7 @@ class ImagesDatabase:
 
     def add_images(self, file_id, frames: Iterable[int]) -> None:
         self.db_connection.executemany(
-            "INSERT INTO images"
-            " (file_id, frame, is_described, is_being_described)"
-            " VALUES (?, ?, 0, 0)",
+            "INSERT INTO images (file_id, frame, is_described) VALUES (?, ?, 0)",
             [(file_id, frame) for frame in frames],
         )
         self.db_connection.commit()
