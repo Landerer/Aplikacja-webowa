@@ -1,5 +1,6 @@
 $(document).ready(function () {
     var canvas = document.getElementById('canvas');
+    var img = null;
     var image_id = null;
 
     // load an undescribed image
@@ -21,11 +22,11 @@ $(document).ready(function () {
             }
             image_id = new_image_id;
             console.log('New image ID=' + image_id)
-            var image = document.createElement('img');
-            image.src = 'image?id=' + image_id;
+            img = document.createElement('img');
+            img.src = 'image?id=' + image_id;
 
             canvas.innerHTML = '';
-            canvas.appendChild(image);
+            canvas.appendChild(img);
             // load existing descriptions
             $.ajax({
                 type: 'GET',
@@ -71,8 +72,8 @@ $(document).ready(function () {
         this.extend = function (x, y) {
             this.end_x = x;
             this.end_y = y;
-            this.rectangle.style.left = this.left() + 'px';
-            this.rectangle.style.top = this.top() + 'px';
+            this.rectangle.style.left = (img.offsetLeft + this.left()) + 'px';
+            this.rectangle.style.top = (img.offsetTop + this.top()) + 'px';
             this.rectangle.style.width = this.width() + 'px';
             this.rectangle.style.height = this.height() + 'px';
         }
@@ -95,6 +96,8 @@ $(document).ready(function () {
                 this.x = ev.clientX + document.body.scrollLeft;
                 this.y = ev.clientY + document.body.scrollTop;
             }
+            this.x -= img.offsetLeft;
+            this.y -= img.offsetTop;
         }
     }
 
