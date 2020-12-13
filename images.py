@@ -4,6 +4,7 @@ from typing import Iterable, List, Optional
 from pathlib import Path
 import logging
 import os
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,15 +12,25 @@ import sqlite3
 
 
 @dataclass(frozen=True)
-class Image:
+class File:
     id: int
-    filepath: str
+    file_path: str
+
+
+@dataclass(frozen=True)
+class Image:
+    NPZ_FRAME_MULTIPLIER = 1_000_000
+    id: int
+    file: File
+    frame: int
     is_described: bool
 
     @lru_cache(maxsize=None)  # TODO: replace with functools.cache with Python3.9
     def load(self):
-        with np.load(self.filepath) as file_data:
-            return file_data.get(file_data.files[0])[0]
+        with np.load(self.file.file_path) as file_data:
+            npz_file = self.frame / self.NPZ_FRAME_MULTIPLIER
+            npz_frame = self.frame % self.NPZ_FRAME_MULTIPLIER
+            return file_data.get(file_data.files[npz_file])[npz_frame]
 
 
 @dataclass(frozen=True)
@@ -55,22 +66,52 @@ class ImagesDatabase:
         self.db_connection.executescript(sqls)
         self.db_connection.commit()
 
-    def add_images(self, file_paths: Iterable[str]) -> None:
+    ### files ###
+
+    def add_file(self, file_path: str) -> int:
+        cursor = self.db_connection.execute(
+            "INSERT INTO files (file_path) VALUES (?)", (file_path,)
+        )
+        file_id = cursor.lastrowid
+        self.db_connection.commit()
+        return file_id
+
+    @staticmethod
+    def _file_from_db_row(row):
+        return File(row["file_id"], row["file_path"])
+
+    def fetch_files(self) -> List[File]:
+        rows = self.db_connection.execute(
+            "SELECT file_id, file_path FROM files"
+        ).fetchall()
+        return [self._file_from_db_row(row) for row in rows]
+
+    ### images ###
+
+    def add_images(self, file_id, frames: Iterable[int]) -> None:
         self.db_connection.executemany(
-            "INSERT INTO images (filepath, is_described, is_being_described)"
-            " VALUES (?, ?, ?)",
-            [(path, 0, 0) for path in file_paths],
+            "INSERT INTO images"
+            " (file_id, frame, is_described, is_being_described)"
+            " VALUES (?, ?, 0, 0)",
+            [(file_id, frame) for frame in frames],
         )
         self.db_connection.commit()
 
     @staticmethod
     def _image_from_db_row(row):
-        return Image(row["image_id"], row["filepath"], row["is_described"])
+        return Image(
+            row["image_id"],
+            File(row["file_id"], row["file_path"]),
+            row["frame"],
+            row["is_described"],
+        )
 
     def fetch_image(self, id) -> Image:
         row = self.db_connection.execute(
-            "SELECT image_id, filepath, is_described FROM images WHERE image_id=?"
-            " ORDER BY image_id",
+            "SELECT image_id, file_id, file_path, frame, is_described"
+            " FROM images"
+            " NATURAL JOIN files"
+            " WHERE image_id=?",
             (id,),
         ).fetchone()
         if row is None:
@@ -78,13 +119,27 @@ class ImagesDatabase:
         return self._image_from_db_row(row)
 
     def fetch_images(self, *, is_described: Optional[bool] = None) -> List[Image]:
-        query_sql = "SELECT image_id, filepath, is_described FROM images"
+        query_sql = (
+            "SELECT image_id, file_id, file_path, frame, is_described"
+            " FROM images"
+            " NATURAL JOIN files"
+            " ORDER BY image_id"
+        )
         query_params = ()
         if is_described is not None:
             query_sql += " WHERE is_described=?"
             query_params = (is_described,)
         rows = self.db_connection.execute(query_sql, query_params).fetchall()
         return [self._image_from_db_row(row) for row in rows]
+
+    def update_image(self, image_id: int, is_described: bool) -> None:
+        self.db_connection.execute(
+            "UPDATE images SET is_described=? WHERE image_id=?",
+            (is_described, image_id),
+        )
+        self.db_connection.commit()
+
+    ### descriptions ###
 
     def add_description(self, d: Description) -> None:
         self.db_connection.execute(
@@ -142,12 +197,6 @@ class ImagesDatabase:
         )
         self.db_connection.commit()
 
-    def update_image(self, image_id: int, is_described: bool) -> None:
-        self.db_connection.execute(
-            "UPDATE images SET is_described=? WHERE image_id=?", (is_described, image_id)
-        )
-        self.db_connection.commit()
-
 
 class ImageNotExistsError(RuntimeError):
     def __init__(self, id) -> None:
@@ -172,25 +221,35 @@ class DescriptionNotExistsError(RuntimeError):
 
 
 class Images:
+    DESCRIPTION_PNG_COLOR = "red"
+    MAX_FRAMES_FROM_NPZ = 3  # sys.maxsize
+
     def __init__(self, source_path: Path, dest_path: Path) -> None:
         super().__init__()
         self.source_path = source_path
         self.dest_path = dest_path
-        self._put_new_files_in_db()
+        self._put_new_images_in_db()
 
     @property
     def _db(self):
         return ImagesDatabase()
 
-    def _put_new_files_in_db(self):
+    def _put_new_images_in_db(self):
         new_files = self._find_new_files()
         logging.info(f"Putting {len(new_files)} new files in the DB")
-        self._db.add_images(new_files)
+        for file_path in new_files:
+            file_id = self._db.add_file(file_path)
+            # add all NPZ frames
+            with np.load(file_path) as npz:
+                for npz_count, npz_file in enumerate(npz.files):
+                    frame_count_start = Image.NPZ_FRAME_MULTIPLIER * npz_count
+                    frame_count = min(len(npz.get(npz_file)), self.MAX_FRAMES_FROM_NPZ)
+                    self._db.add_images(file_id, range(frame_count_start, frame_count))
 
     def _find_new_files(self) -> Iterable[str]:
         logging.info("Searching for new files...")
         dir_paths = set(self._find_all_files())
-        db_paths = {i.filepath for i in self._db.fetch_images()}
+        db_paths = {i.file_path for i in self._db.fetch_files()}
         return dir_paths - db_paths
 
     def _find_all_files(self) -> Iterable[str]:
@@ -205,7 +264,7 @@ class Images:
             raise ImageNotExistsError(image_id) from e
 
     def get_images(self, is_described: Optional[bool] = None) -> Iterable[Image]:
-        return self._db.fetch_images(is_described=is_described)
+        return self._db.fetch_files(is_described=is_described)
 
     def add_description(self, d: Description) -> None:
         self._db.add_description(d)
