@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 
+from PIL import Image as PilImage, ImageDraw
 import matplotlib.pyplot as plt
 import numpy as np
 import sqlite3
@@ -299,8 +300,19 @@ class Images:
     def save_image(self, image_id: int) -> None:
         self._db.update_image(image_id, is_described=True)
         image = self._db.fetch_image(image_id)
+
+        image_png = PilImage.open(image.asPng())
+        # draw rectangles
+        image_draw = ImageDraw.Draw(image_png)
+        for descr in self.get_descriptions(image_id):
+            image_draw.rectangle(
+                [descr.x, descr.y, descr.x + descr.width, descr.y + descr.height],
+                outline=self.DESCRIPTION_PNG_COLOR,
+                width=2,
+            )
+
         image_filename = Path(image.file.file_path).name
         saved_filepath = Path(self.dest_path) / f"{image_filename}_{image.frame}.png"
         logging.info("Saving image to %s", saved_filepath)
-        with open(saved_filepath, "wb") as f:
-            f.write(image.asPng().read())
+        with open(saved_filepath, "wb") as save_file:
+            image_png.save(save_file)
