@@ -1,6 +1,7 @@
 $(document).ready(function () {
     var canvas = document.getElementById('canvas');
     var image_id = null;
+
     // load an undescribed image
     function loadNewImage() {
         canvas.innerHTML = 'Loading new image...';
@@ -25,15 +26,66 @@ $(document).ready(function () {
 
             canvas.innerHTML = '';
             canvas.appendChild(image);
+            // load existing descriptions
+            $.ajax({
+                type: 'GET',
+                url: 'images/' + image_id + '/descriptions',
+                accepts: 'application/json',
+            }).done(function (descriptions) {
+                console.log(descriptions);
+                for (descrNumber in descriptions) {
+                    var d = descriptions[descrNumber];
+                    var description = new Description(d.id, d.x, d.y);
+                    description.extend(d.x + d.width, d.y + d.height);
+                    description.markFinished();
+                }
+            })
         })
     }
     loadNewImage();
 
-    var rectCoords = {
+    function Description(descr_id, start_x, start_y) {
+        this.id = descr_id;
+
+        this.start_x = this.end_x = start_x;
+        this.start_y = this.end_y = start_y;
+
+        this.left = function () {
+            return Math.min(this.start_x, this.end_x);
+        }
+        this.top = function () {
+            return Math.min(this.start_y, this.end_y);
+        }
+        this.width = function () {
+            return Math.abs(this.end_x - this.start_x);
+        }
+        this.height = function () {
+            return Math.abs(this.end_y - this.start_y);
+        }
+
+        this.rectangle = document.createElement('div');
+        this.rectangle.id = descr_id;
+        this.rectangle.className = 'rectangle'
+        canvas.appendChild(this.rectangle)
+
+        this.extend = function (x, y) {
+            this.end_x = x;
+            this.end_y = y;
+            this.rectangle.style.left = this.left() + 'px';
+            this.rectangle.style.top = this.top() + 'px';
+            this.rectangle.style.width = this.width() + 'px';
+            this.rectangle.style.height = this.height() + 'px';
+        }
+
+        this.markFinished = function () {
+            this.rectangle.className += ' rectangle_ready';
+        }
+    }
+    var description = null;
+
+    var mouse = {
         x: 0,
         y: 0,
-        startX: 0,
-        startY: 0,
         setPosition: function (e) {
             var ev = e || window.event; //Moz || IE
             if (ev.pageX) { //Moz
@@ -43,58 +95,38 @@ $(document).ready(function () {
                 this.x = ev.clientX + document.body.scrollLeft;
                 this.y = ev.clientY + document.body.scrollTop;
             }
-        },
-        fixStartPosition: function () {
-            this.startX = this.x;
-            this.startY = this.y;
-        },
-        left: function () { return Math.min(this.x, this.startX); },
-        top: function () { return Math.min(this.y, this.startY); },
-        width: function () { return Math.abs(this.x - this.startX); },
-        height: function () { return Math.abs(this.y - this.startY); },
-    };
+        }
+    }
 
-    var rectangle = null;
     canvas.onmousemove = function (e) {
-        rectCoords.setPosition(e);
-        if (rectangle !== null) {
-            rectangle.style.left = rectCoords.left() + 'px';
-            rectangle.style.top = rectCoords.top() + 'px';
-            rectangle.style.width = rectCoords.width() + 'px';
-            rectangle.style.height = rectCoords.height() + 'px';
+        mouse.setPosition(e);
+        if (description !== null) {
+            description.extend(mouse.x, mouse.y);
         }
     }
 
     canvas.onclick = function () {
-        if (rectangle !== null) {
-            var ready_rectangle = rectangle;
+        if (description !== null) {
+            var finished_description = description;
             $.ajax({
                 type: 'POST',
-                url: 'images/' + image_id + '/descriptions/' + rectangle.id,
+                url: 'images/' + image_id + '/descriptions/' + description.id,
                 accepts: 'application/json',
                 dataType: 'json',
                 data: {
-                    'x': rectCoords.left(),
-                    'y': rectCoords.top(),
-                    'width': rectCoords.width(),
-                    'height': rectCoords.height(),
+                    'x': description.left(),
+                    'y': description.top(),
+                    'width': description.width(),
+                    'height': description.height(),
                 }
             }).done(function (data) {
-                ready_rectangle.className += ' rectangle_ready';
+                finished_description.markFinished();
             })
-            rectangle = null;
+            description = null;
             canvas.style.cursor = "default";
         } else {
             var descr_id = canvas.childElementCount - 1;
-            rectCoords.fixStartPosition();
-
-            rectangle = document.createElement('div');
-            rectangle.id = descr_id;
-            rectangle.className = 'rectangle'
-            rectangle.style.left = rectCoords.left() + 'px';
-            rectangle.style.top = rectCoords.top() + 'px';
-
-            canvas.appendChild(rectangle)
+            description = new Description(descr_id, mouse.x, mouse.y);
             canvas.style.cursor = "crosshair";
         }
     }
