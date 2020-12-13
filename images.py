@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Iterable, List, Optional
 from pathlib import Path
+import io
 import logging
 import os
 import sys
@@ -25,6 +26,7 @@ class Image:
     frame: int
     is_described: bool
 
+    @lru_cache(maxsize=None)  # TODO: replace with functools.cache with Python3.9
     def load(self):
         with np.load(self.file.file_path) as file_data:
             npz_file = file_data.files[self.frame // self.NPZ_FRAME_MULTIPLIER]
@@ -36,6 +38,12 @@ class Image:
                 npz_frame,
             )
             return file_data.get(npz_file)[npz_frame]
+
+    def asPng(self):
+        file_object = io.BytesIO()
+        plt.imsave(file_object, self.load(), cmap="viridis")
+        file_object.seek(0)
+        return file_object
 
 
 @dataclass(frozen=True)
@@ -290,4 +298,9 @@ class Images:
 
     def save_image(self, image_id: int) -> None:
         self._db.update_image(image_id, is_described=True)
-        # TODO: generate image in destination folder
+        image = self._db.fetch_image(image_id)
+        image_filename = Path(image.file.file_path).name
+        saved_filepath = Path(self.dest_path) / f"{image_filename}_{image.frame}.png"
+        logging.info("Saving image to %s", saved_filepath)
+        with open(saved_filepath, "wb") as f:
+            f.write(image.asPng().read())

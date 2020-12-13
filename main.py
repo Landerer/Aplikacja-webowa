@@ -1,13 +1,9 @@
-from typing import cast
 from dataclasses import asdict
-import io
 import logging
 
 from flask import Flask, send_file, render_template, request
 from flask_restful import Api, Resource
 from werkzeug.exceptions import NotFound
-import matplotlib.pyplot as plt
-import numpy as np
 
 import images as img
 
@@ -28,13 +24,9 @@ def main_page():
 def get_image():
     id = request.args.get("id")
     try:
-        image_data = images.get_image(id).load()
+        file_object = images.get_image(id).asPng()
     except img.ImageNotExistsError as e:
         raise NotFound(str(e)) from e
-
-    file_object = io.BytesIO()
-    plt.imsave(file_object, image_data, cmap="viridis")
-    file_object.seek(0)
 
     return send_file(file_object, mimetype="image/PNG")
 
