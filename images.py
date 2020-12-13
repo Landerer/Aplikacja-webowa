@@ -145,10 +145,12 @@ class ImagesDatabase:
         rows = self.db_connection.execute(query_sql, query_params).fetchall()
         return [self._image_from_db_row(row) for row in rows]
 
-    def update_image(self, image_id: int, is_described: bool) -> None:
+    def update_image(
+        self, image_id: int, *, is_described: bool, described_filename: str = None
+    ) -> None:
         self.db_connection.execute(
-            "UPDATE images SET is_described=? WHERE image_id=?",
-            (is_described, image_id),
+            "UPDATE images SET is_described=?, described_filename=? WHERE image_id=?",
+            (is_described, described_filename, image_id),
         )
         self.db_connection.commit()
 
@@ -298,7 +300,6 @@ class Images:
         self._db.delete_descriptions(image_id)
 
     def save_image(self, image_id: int) -> None:
-        self._db.update_image(image_id, is_described=True)
         image = self._db.fetch_image(image_id)
 
         image_png = PilImage.open(image.asPng())
@@ -312,7 +313,11 @@ class Images:
             )
 
         image_filename = Path(image.file.file_path).name
-        saved_filepath = Path(self.dest_path) / f"{image_filename}_{image.frame}.png"
+        saved_filename = f"{image_filename}_{image.frame}.png"
+        saved_filepath = Path(self.dest_path) / saved_filename
         logging.info("Saving image to %s", saved_filepath)
         with open(saved_filepath, "wb") as save_file:
             image_png.save(save_file)
+        self._db.update_image(
+            image_id, is_described=True, described_filename=saved_filename
+        )
