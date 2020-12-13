@@ -53,6 +53,9 @@ class Image(Resource):
         except img.ImageNotExistsError as e:
             raise NotFound(str(e)) from e
 
+    def put(self, image_id):
+        images.save_image(image_id)
+
 
 @api.resource("/images/<int:image_id>/descriptions")
 class Descriptions(Resource):

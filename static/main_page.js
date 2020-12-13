@@ -133,8 +133,14 @@ $(document).ready(function () {
     }
 
     document.getElementById('save').onclick = function () {
-        // TODO: zapis w bazie
-        loadNewImage();
+        $.ajax({
+            type: 'PUT',
+            url: 'images/' + image_id,
+            accepts: 'application/json',
+        }).done(function (data) {
+            loadNewImage();
+        })
+
     }
 
     document.getElementById('next').onclick = function () {

@@ -142,6 +142,12 @@ class ImagesDatabase:
         )
         self.db_connection.commit()
 
+    def update_image(self, image_id: int, is_described: bool) -> None:
+        self.db_connection.execute(
+            "UPDATE images SET is_described=? WHERE image_id=?", (is_described, image_id)
+        )
+        self.db_connection.commit()
+
 
 class ImageNotExistsError(RuntimeError):
     def __init__(self, id) -> None:
@@ -170,7 +176,6 @@ class Images:
         super().__init__()
         self.source_path = source_path
         self.dest_path = dest_path
-        # self._db = ImagesDatabase()
         self._put_new_files_in_db()
 
     @property
@@ -219,3 +224,7 @@ class Images:
 
     def delete_descriptions(self, image_id: int) -> None:
         self._db.delete_descriptions(image_id)
+
+    def save_image(self, image_id: int) -> None:
+        self._db.update_image(image_id, is_described=True)
+        # TODO: generate image in destination folder
