@@ -25,12 +25,17 @@ class Image:
     frame: int
     is_described: bool
 
-    @lru_cache(maxsize=None)  # TODO: replace with functools.cache with Python3.9
     def load(self):
         with np.load(self.file.file_path) as file_data:
-            npz_file = self.frame / self.NPZ_FRAME_MULTIPLIER
+            npz_file = file_data.files[self.frame // self.NPZ_FRAME_MULTIPLIER]
             npz_frame = self.frame % self.NPZ_FRAME_MULTIPLIER
-            return file_data.get(file_data.files[npz_file])[npz_frame]
+            logging.info(
+                "Loading NPZ %s file %s frame %d",
+                self.file.file_path,
+                npz_file,
+                npz_frame,
+            )
+            return file_data.get(npz_file)[npz_frame]
 
 
 @dataclass(frozen=True)
@@ -123,12 +128,11 @@ class ImagesDatabase:
             "SELECT image_id, file_id, file_path, frame, is_described"
             " FROM images"
             " NATURAL JOIN files"
-            " ORDER BY image_id"
+            + (" WHERE is_described=?" if is_described is not None else "")
+            + " ORDER BY image_id"
         )
-        query_params = ()
-        if is_described is not None:
-            query_sql += " WHERE is_described=?"
-            query_params = (is_described,)
+        query_params = (is_described,) if is_described is not None else ()
+
         rows = self.db_connection.execute(query_sql, query_params).fetchall()
         return [self._image_from_db_row(row) for row in rows]
 
@@ -264,7 +268,7 @@ class Images:
             raise ImageNotExistsError(image_id) from e
 
     def get_images(self, is_described: Optional[bool] = None) -> Iterable[Image]:
-        return self._db.fetch_files(is_described=is_described)
+        return self._db.fetch_images(is_described=is_described)
 
     def add_description(self, d: Description) -> None:
         self._db.add_description(d)
